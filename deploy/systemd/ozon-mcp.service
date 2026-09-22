@@ -10,7 +10,7 @@ WorkingDirectory=/root
 EnvironmentFile=/root/.config/ozon-mcp/env
 Environment=MCP_TRANSPORT=http
 Environment=PATH=/root/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
-ExecStart=/root/.local/bin/uvx --from ozon-mcp-ru ozon-mcp-ru
+ExecStart=/root/.local/bin/uvx --from 'ozon-mcp-ru==0.6.0' ozon-mcp-ru
 Restart=always
 RestartSec=5
 
