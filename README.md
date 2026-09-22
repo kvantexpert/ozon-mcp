@@ -1,53 +1,125 @@
 # Ozon MCP
 
-MCP server, deployment configuration and long-term knowledge base for Ozon Seller integration.
+MCP-сервер, конфигурация развертывания и долгосрочная база знаний для интеграции с кабинетом продавца Ozon.
 
-## Public endpoint
+Репозиторий предназначен не только для исходного кода и развертывания сервера, но и как **рабочая документация проекта**, к которой можно вернуться через месяц или год и продолжить разработку с помощью ИИ-ассистента.
+
+## Публичный MCP endpoint
 
 `https://ozon-mcp.kvantexpert.ru/mcp`
 
-Ozon credentials are server-side only. Never commit credentials, API keys, cookies or real digital codes.
+Учетные данные Ozon хранятся только на сервере.
 
-## Documentation
+**Никогда не размещать в GitHub:**
+- Client-Id;
+- Api-Key;
+- cookies и токены;
+- реальные цифровые коды товаров;
+- другие секретные данные.
 
-This repository is intended to remain usable as a project knowledge base months or years later.
+## Документация проекта
 
-- [Project model](docs/PROJECT_MODEL.md)
-- [Card lifecycle](docs/CARD_LIFECYCLE.md)
-- [Attributes and dictionaries](docs/ATTRIBUTES_AND_DICTIONARIES.md)
-- [Ozon operations](docs/OZON_OPERATIONS.md)
-- [Digital delivery](docs/DIGITAL_DELIVERY.md)
-- [Test history](docs/TEST_HISTORY.md)
-- [AI maintenance instructions](docs/AI_MAINTENANCE.md)
+В каталоге `docs/` находится база знаний, описывающая архитектуру, механизм работы карточек, операции Ozon API, цифровую поставку и результаты фактических тестов.
 
-## Reference product
+- [Модель проекта](docs/PROJECT_MODEL.md)
+- [Жизненный цикл карточки](docs/CARD_LIFECYCLE.md)
+- [Характеристики, словари и классификация](docs/ATTRIBUTES_AND_DICTIONARIES.md)
+- [Карта операций Ozon](docs/OZON_OPERATIONS.md)
+- [Цифровая поставка](docs/DIGITAL_DELIVERY.md)
+- [История фактических тестов](docs/TEST_HISTORY.md)
+- [Инструкция для ИИ-ассистента](docs/AI_MAINTENANCE.md)
+
+## Эталонная карточка
+
+Для исследования механизма создания цифровых товаров использовалась карточка:
 
 **1С:Бухгалтерия 8 ПРОФ. Электронная поставка**
 
-- offer_id: `4601546116680`
-- product_id: `6417979753`
-- sku: `5865629857`
-- description_category_id: `200001489` — Цифровые товары
-- type_id: `971075562` — Код активации офисного приложения
-- price: `23000 RUB`
-- VAT: `0`
+Основные идентификаторы:
 
-The product was created, characteristics were written and verified, an image was accepted as primary, and digital stock was successfully changed from 0 to 1 through MCP and independently verified through Ozon.
+- `offer_id: 4601546116680`
+- `product_id: 6417979753`
+- `sku: 5865629857`
+- `description_category_id: 200001489` — Цифровые товары
+- `type_id: 971075562` — Код активации офисного приложения
 
-## Core engineering rule
+Коммерческие данные:
 
-Use:
+- цена: `23 000 RUB`
+- НДС: `0`
+
+В ходе тестирования было подтверждено:
+
+- карточка создана в Ozon;
+- характеристики записаны и перечитаны;
+- изображение принято Ozon и назначено основным;
+- модерация подтверждена;
+- валидация прошла успешно;
+- цифровой остаток изменен с `0` на `1` через MCP;
+- результат изменения остатка независимо проверен прямым запросом к Ozon API.
+
+## Основной принцип работы
+
+Для любых новых операций и изменений использовать последовательность:
 
 `DISCOVER → READ → VALIDATE → WRITE → VERIFY → DOCUMENT`
 
-Do not guess license terms or dictionary values.
+То есть:
 
-For digital fulfillment, keep the separate lifecycle:
+1. **DISCOVER** — найти актуальную категорию, тип, operation и endpoint.
+2. **READ** — получить текущее состояние и параметры.
+3. **VALIDATE** — проверить обязательные поля, словари, ограничения и смысл данных.
+4. **WRITE** — выполнить изменение только после проверки.
+5. **VERIFY** — перечитать состояние непосредственно после записи.
+6. **DOCUMENT** — зафиксировать подтвержденный результат в базе знаний.
+
+### Главное правило
+
+Не угадывать значения характеристик и лицензионных параметров.
+
+Если значение не подтверждено надежным источником, его нельзя выбирать только потому, что оно кажется подходящим.
+
+## Жизненный цикл цифрового товара
+
+Карточка товара и выдача цифрового кода — разные процессы.
+
+Полная модель:
 
 `CARD → STOCK → ORDER → POSTING → CODE → DELIVERY`
 
-The final order-to-code-to-delivery path has not yet been completed with a real posting and must remain explicitly marked as unverified until tested.
+Где:
 
-## Repository rule
+- **CARD** — карточка товара;
+- **STOCK** — доступное количество цифровых единиц;
+- **ORDER** — заказ;
+- **POSTING** — конкретное цифровое отправление;
+- **CODE** — код, предназначенный покупателю;
+- **DELIVERY** — фактическая выдача кода.
 
-Every important discovery or experiment should update the relevant document in `docs/`. Record dates, operation IDs, endpoints, inputs without secrets, outputs, errors, conclusions and next steps.
+На текущем этапе реально подтверждена цепочка:
+
+`CARD → STOCK`
+
+Последовательность `ORDER → POSTING → CODE → DELIVERY` еще не прошла полный тест на реальном цифровом отправлении и поэтому в документации помечена как непроверенная.
+
+## Правило ведения репозитория
+
+Каждое существенное исследование или изменение механизма должно быть отражено в `docs/`.
+
+Для каждого теста фиксировать:
+
+- дату;
+- operation_id;
+- endpoint;
+- тип операции READ/WRITE;
+- входные параметры без секретов;
+- ответ Ozon;
+- task_id, если он создается;
+- связанные `offer_id`, `product_id`, `sku`;
+- ошибки;
+- вывод;
+- следующий шаг.
+
+Документация должна сохранять **не только успешные операции, но и отрицательные результаты** — например, устаревшие endpoints, ошибки валидации и операции, которые не следует повторять.
+
+Это позволяет будущему ИИ не начинать исследование заново и не повторять уже проверенные или небезопасные действия.
