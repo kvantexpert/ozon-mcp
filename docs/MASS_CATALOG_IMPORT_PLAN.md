@@ -197,3 +197,45 @@
 После чтения этих файлов не спрашивать пользователя повторно про цель, количество 293, источник GOODS.JSON, лимиты, правило цены и endpoint импорта.
 
 GitHub issue задачи: #2 — «Загрузить 293 позиции 1С в Ozon — без отдельного цикла предварительных проверок».
+
+
+## Аудит и фактический блокер — 24.09.2026
+
+После сверки с актуальной схемой Ozon API уточнён контракт импорта. Сокращённое описание MCP operation `{offer_id, attributes, images, dimensions, type_id}` не является полной схемой Ozon Seller API.
+
+Для реального `POST /v3/product/import` нужно учитывать как минимум:
+
+- `offer_id`;
+- `description_category_id`;
+- `type_id`;
+- `price`;
+- `currency_code`;
+- `depth`, `width`, `height`, `dimension_unit`;
+- `weight`, `weight_unit`;
+- `attributes`;
+- изображения при наличии.
+
+Ozon требует реальные ненулевые объёмно-весовые характеристики. Поле `dimensions` не следует считать самостоятельным полем Ozon API.
+
+### Текущий фактический статус нового аккаунта
+
+24.09.2026:
+
+- `ozon_product_list`: **0 товаров**;
+- `/v4/product/info/limit`: total **0/500**, daily_create **2/1500**, daily_update **0/20000**, rate **30000/min**;
+- `/v1/description-category/tree`: `200001489` и `971075562` возвращаются с `disabled=true`;
+- импорт без `description_category_id`: `description_category_is_empty`;
+- импорт с `description_category_id=200001489`: `used_forbidden_category`.
+
+**Главный блокер сейчас — доступность категории в новом Ozon-кабинете.** Лимит 500 и дневной лимит создания 1500 не являются блокером.
+
+Не повторять массовый импорт до снятия этого блокера.
+
+### Исправление прежних формулировок
+
+- `200001489` больше не считать «рабочей категорией» для нового аккаунта; считать её эталонной/исследованной категорией, пока API возвращает `disabled=true`.
+- `daily_create=0/1500` заменить на последний фактический снимок `2/1500`.
+- `active_cabinet` из `ozon_check_auth` фактически был `null`, `cabinets=[]`; не описывать named cabinet как подтверждённый.
+- Не путать MCP wrapper description с полной Ozon request schema.
+
+Полный аудит сохранён в `docs/AUDIT_2026-09-24.md`.
