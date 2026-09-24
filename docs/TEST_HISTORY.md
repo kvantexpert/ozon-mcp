@@ -200,3 +200,59 @@ MCP catalog помечает operation deprecated.
 Эта база знаний описывает состояние исследования на **22 сентября 2026 года**.
 
 Ozon Seller API может изменяться. Перед продолжением проекта всегда перепроверять актуальные endpoints и schemas.
+
+
+## 14. Массовый импорт 293 — отрицательные тесты 24.09.2026
+
+### Новый аккаунт
+
+`ozon_product_list`:
+
+- total = 0;
+- items = [].
+
+`/v4/product/info/limit`:
+
+- total = 0/500;
+- daily_create = 2/1500;
+- daily_update = 0/20000;
+- rate limit = 30000/min.
+
+### Category tree
+
+`POST /v1/description-category/tree` для нового аккаунта показал `disabled=true` для:
+
+- `200001489` — Цифровые товары;
+- `971075562` — Код активации офисного приложения;
+- остальных возвращённых категорий/types этого дерева также были disabled.
+
+### Import test A
+
+Endpoint: `POST /v3/product/import`.
+
+Без `description_category_id`:
+
+- task_id = `5697012976`;
+- status = failed;
+- error = `description_category_is_empty`.
+
+### Import test B
+
+С `description_category_id=200001489`:
+
+- task_id = `5697014985`;
+- status = failed;
+- error = `used_forbidden_category`;
+- message = «Попытка создать товар из запрещенной категории».
+
+### Вывод
+
+Массовый импорт 293 на новом аккаунте пока не выполнялся. Причина остановки — запрещённая/disabled категория, а не лимит ассортимента.
+
+Не считать новый аккаунт готовым к импорту до появления разрешённой категории/type.
+
+## 15. Сверка import schema с Ozon API — 24.09.2026
+
+Актуальная схема `/v3/product/import` требует учитывать обязательные поля категории/type/offer/price и реальные ненулевые dimensions/weight. MCP `describe_method` показывает сокращённый wrapper contract, поэтому для payload нельзя ограничиваться только `{offer_id, attributes, images, dimensions, type_id}`.
+
+Также Ozon обновлял этот метод 10.07.2026: `offer_id` был отмечен обязательным, `images360` удалён из request.
