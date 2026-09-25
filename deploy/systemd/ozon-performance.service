@@ -1,0 +1,17 @@
+[Unit]
+Description=Ozon Performance MCP Server
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/root
+EnvironmentFile=/root/.config/ozon-mcp/perf.env
+Environment=PATH=/root/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+ExecStart=/root/.local/bin/uvx --from marketplaces-mcp-ru ozon-perf-mcp
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
