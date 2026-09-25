@@ -29,6 +29,7 @@ MCP-сервер, конфигурация развертывания и дол�
 - [История фактических тестов](docs/TEST_HISTORY.md)
 - [Аудит и сверка с Ozon API — 24.09.2026](docs/AUDIT_2026-09-24.md)
 - [Инструкция для ИИ-ассистента](docs/AI_MAINTENANCE.md)
+- [Контрольная точка Ozon Performance MCP — 26.09.2026](docs/PERFORMANCE_MCP_BASELINE_2026-09-26.md)
 
 ## Эталонная карточка
 
