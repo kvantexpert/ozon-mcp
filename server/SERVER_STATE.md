@@ -1,23 +1,44 @@
 # Состояние сервера Ozon MCP
 
-Фактическая фиксация текущего VPS: 26 сентября 2026.
+Фактическая фиксация текущего VPS: **26 сентября 2026**.
 
 ## Сервер
 
 - ОС: Ubuntu 22.04.4 LTS (Jammy Jellyfish)
-- MCP endpoint Seller: https://ozon-mcp.kvantexpert.ru/mcp
-- Seller MCP backend: 127.0.0.1:8000
-- Performance MCP backend: 127.0.0.1:8001
+- Host: `cv7976275`
+- Seller MCP backend: `127.0.0.1:8000`
+- Performance MCP backend: `127.0.0.1:8001`
 - Nginx: 80/443
-- Seller systemd service: ozon-mcp.service
-- Performance systemd service: ozon-performance.service
+- Seller systemd service: `ozon-mcp.service`
+- Performance systemd service: `ozon-performance.service`
 - оба сервиса включены и работают
-- сервисы работают от root
-- рабочий каталог: /root
-- Seller credentials: /root/.config/ozon-mcp/env
-- Performance credentials: /root/.config/ozon-mcp/perf.env
-- credentials имеют права 600, root:root
+- оба сервиса работают от root
+- Seller credentials: `/root/.config/ozon-mcp/env`
+- Performance credentials: `/root/.config/ozon-mcp/perf.env`
+- credentials: `600 root:root`
 - секреты в GitHub не хранятся.
+
+## Архитектура
+
+```
+Internet
+   |
+   +--> Nginx HTTPS
+   |       |
+   |       +--> Seller MCP :8000
+   |              |
+   |              +--> Ozon Seller API
+   |
+   +--> Performance MCP: НЕТ публичного route
+           |
+           +--> 127.0.0.1:8001
+                  |
+                  +--> OAuth client_credentials
+                  |
+                  +--> Ozon Performance API
+```
+
+Performance intentionally remains local-only. Это отдельный сервис и отдельный credential set.
 
 ## Seller MCP
 
@@ -29,7 +50,7 @@ Production Seller MCP сохранен без изменения поведен�
 
 Версия:
 
-- ozon-mcp-ru: 0.6.0
+- `ozon-mcp-ru 0.6.0`
 
 Backend:
 
@@ -39,20 +60,22 @@ Backend:
 
 `https://ozon-mcp.kvantexpert.ru/mcp`
 
+Seller MCP не входил в Performance migration и должен оставаться независимым.
+
 ## Performance MCP
 
-Создан отдельный сервис:
+Отдельный сервис:
 
 `ozon-performance.service`
 
-Запуск:
+Pinned runtime:
 
-`/root/.local/bin/uvx --from marketplaces-mcp-ru ozon-perf-mcp`
+- `marketplaces-mcp-ru 0.6.1`
+- upstream commit `ec2114595695536e001e09e1144a357118852db1`
 
-Версия:
+Фактический runtime:
 
-- marketplaces-mcp-ru: 0.6.1
-- upstream commit: `ec2114595695536e001e09e1144a357118852db1`
+`/opt/kvantexpert/marketplaces-mcp-ru/.venv/bin/ozon-perf-mcp`
 
 Backend:
 
@@ -62,63 +85,102 @@ Backend:
 
 Streamable HTTP.
 
-Публичного endpoint для Performance MCP пока нет. Порт 8001 намеренно остается loopback-only.
+Публичного endpoint нет.
 
-## Performance credentials
+## Performance catalog
+
+Источник tracked patch:
+
+`patches/marketplaces-mcp-ru/perf_endpoints.yaml`
+
+Количество:
+
+**48**
+
+Установленный runtime также подтвержден как 48-operation catalog.
+
+Автоматические проверки:
+
+`tests/test_performance_catalog_patch.py`
+
+Live-аудит 26.09.2026:
+
+**48/48 operation_id успешно возвращены через `ozon_perf_describe_method`; 0 FAIL.**
+
+## Новые операции
+
+Подтверждены в live runtime:
+
+1. `POST /api/client/statistics/products/sku` — `read`
+2. `PATCH /api/client/campaign/{campaignId}` — `write`
+3. `GET /api/client/campaign/all_sku_promo/set_bid` — `write`
+
+## Safety corrections
+
+В runtime подтверждены:
+
+- `POST /api/client/min/sku` → `read`
+- `POST /api/client/search_promo/bids/recommendation` → `read`
+- `GET /api/client/campaign/all_sku_promo/activate` → `write`
+- `GET /api/client/campaign/all_sku_promo/deactivate` → `write`
+- `GET /api/client/campaign/all_sku_promo/set_bid` → `write`
+
+Delete операции остаются `destructive`.
+
+## Credentials
 
 Файл:
 
 `/root/.config/ozon-mcp/perf.env`
 
-Переменные:
+Содержит только Performance credentials и runtime variables.
 
-`OZON_PERF_CLIENT_ID`
+Реальные значения не фиксируются в GitHub.
 
-`OZON_PERF_CLIENT_SECRET`
+## Проверки
 
-Реальные значения никогда не добавлять в GitHub.
+В текущей контрольной точке подтверждены:
 
-## Подтвержденная работоспособность Performance
-
-Подтверждены:
-
-1. OAuth client_credentials;
-2. получение Bearer token;
-3. прямой запрос к Performance API;
+1. Performance OAuth;
+2. Bearer token;
+3. прямой Performance API request;
 4. MCP initialize;
 5. MCP tools/list;
 6. MCP tools/call;
-7. вызов `ozon_perf_call_method`;
-8. operation `ozonperf_get_api_client_campaign`.
+7. describe_method;
+8. live catalog audit 48/48.
 
-Контрольный результат:
+Ранее контрольный read `GET /api/client/campaign` возвращал HTTP 200 и пустой список кампаний.
 
-```json
-{
-  "ok": true,
-  "status": 200,
-  "data": {
-    "list": [],
-    "total": "0"
-  }
-}
-```
+Отдельный post-migration read smoke-test остается следующим коротким шагом.
 
-## Nginx
+## Deployment structure
 
-Production Seller MCP использует HTTPS через Let's Encrypt и проксирует `/mcp` на 127.0.0.1:8000.
+Repository:
 
-Performance MCP пока не добавлен в nginx.
+`https://github.com/kvantexpert/ozon-mcp`
 
-## Восстановление
+Ключевые файлы Performance:
+
+- `patches/marketplaces-mcp-ru/perf_endpoints.yaml` — runtime catalog patch;
+- `tests/test_performance_catalog_patch.py` — catalog regression tests;
+- `deploy/scripts/install-performance-mcp.sh` — reproducible installer;
+- `deploy/systemd/ozon-performance.service` — production systemd unit;
+- `docs/PERFORMANCE_API_MATRIX_2026-09-26.md` — 48-operation API contract;
+- `docs/PERFORMANCE_PATCH_PLAN_2026-09-26.md` — implementation record;
+- `server/PERFORMANCE_RUNTIME.md` — VPS runtime state;
+- `server/SERVER_STATE.md` — overall VPS state;
+- `docs/PERFORMANCE_MCP_BASELINE_2026-09-26.md` — baseline and next steps.
+
+## Recovery
 
 ### Seller
 
-Ubuntu -> uv -> nginx + certbot -> env -> systemd -> MCP 127.0.0.1:8000 -> HTTPS -> проверка MCP -> проверка Ozon API.
+Ubuntu → uv → nginx/certbot → env → systemd → MCP :8000 → HTTPS → Ozon Seller API.
 
 ### Performance
 
-Ubuntu -> uv -> `marketplaces-mcp-ru 0.6.1` -> `perf.env` -> `ozon-performance.service` -> MCP 127.0.0.1:8001 -> OAuth -> Performance API -> MCP tool call.
+Ubuntu → pinned upstream → patched catalog → local venv → `perf.env` → systemd → MCP :8001 → OAuth → Ozon Performance API.
 
 ## Не переносится
 
@@ -135,12 +197,10 @@ Ubuntu -> uv -> `marketplaces-mcp-ru 0.6.1` -> `perf.env` -> `ozon-performance.s
 
 ## Следующая точка разработки
 
-Перед публикацией Performance MCP наружу необходимо:
+1. Post-migration read smoke-test.
+2. Read API coverage.
+3. Минимальный набор AI-visible Performance tools.
+4. Отдельное тестирование write/confirmation.
+5. Архитектура внешнего доступа.
 
-1. закончить проверку необходимых READ методов;
-2. определить минимальный набор инструментов для AI;
-3. отдельно проверить WRITE методы;
-4. выбрать безопасную схему внешнего MCP доступа;
-5. не менять Seller MCP без необходимости.
-
-Подробная контрольная точка: `docs/PERFORMANCE_MCP_BASELINE_2026-09-26.md`.
+До принятия отдельного решения Performance MCP остается loopback-only.
