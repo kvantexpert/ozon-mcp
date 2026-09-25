@@ -2,262 +2,151 @@
 
 ## Назначение
 
-Этот документ фиксирует состояние проекта после первого полного запуска и end-to-end теста Ozon Performance MCP на рабочем VPS.
+Этот документ фиксирует состояние проекта **после миграции на pinned patched runtime и полного live-аудита каталога**.
 
-Это **отправная точка для дальнейшей разработки**. Будущие изменения должны опираться на эту зафиксированную конфигурацию и не ломать существующий Seller MCP.
+Это контрольная точка для дальнейшей разработки. Seller MCP должен оставаться независимым.
 
-## Что было сделано
+## Текущий статус
 
-На VPS обнаружена готовая реализация Ozon Performance внутри пакета `marketplaces-mcp-ru 0.6.1`.
+**LIVE / DEPLOYED / 48-OPERATION CATALOG AUDITED**
 
-Используется модуль:
+VPS:
 
-- `ozon_perf_mcp`
-- entrypoint: `ozon-perf-mcp`
-- каталог методов: `ozon_mcp/perf_endpoints.yaml`
-- workflow-конфигурация: `ozon_perf_mcp/workflows.yaml`
+`cv7976275`
 
-Каталог содержит **45 Performance API operation_id**.
-
-Для Performance создан отдельный systemd-сервис:
+Performance service:
 
 `ozon-performance.service`
 
-Он запускает:
-
-`uvx --from marketplaces-mcp-ru ozon-perf-mcp`
-
-и слушает только:
+Backend:
 
 `127.0.0.1:8001`
 
-Seller MCP при этом остался без изменений:
+Seller backend:
 
-`ozon-mcp.service → 127.0.0.1:8000`
+`127.0.0.1:8000`
 
-## Текущая архитектура
+Performance публично не опубликован.
+
+## Архитектура
 
 ```
-                         VPS cv7976275
-                              |
-              +---------------+---------------+
-              |                               |
-       Seller MCP                       Performance MCP
-   ozon-mcp.service               ozon-performance.service
-       :8000                             :8001
-              |                               |
-              v                               v
-       Ozon Seller API                 Ozon Performance API
-              |                               |
-              +---------------+---------------+
-                              |
-                         Ozon account
+                    VPS cv7976275
+                         |
+             +-----------+-----------+
+             |                       |
+       Seller MCP              Performance MCP
+       :8000                   :8001 loopback
+             |                       |
+       Ozon Seller API        OAuth -> Ozon Performance API
 ```
 
-Публичным сейчас остается только существующий Seller MCP:
+Seller и Performance используют отдельные сервисы и credentials.
 
-`https://ozon-mcp.kvantexpert.ru/mcp`
+## Runtime
 
-Performance MCP **намеренно не опубликован наружу**. Порт 8001 доступен только локально на VPS.
+Performance:
+
+- package: `marketplaces-mcp-ru 0.6.1`
+- upstream commit: `ec2114595695536e001e09e1144a357118852db1`
+- runtime: `/opt/kvantexpert/marketplaces-mcp-ru/.venv/bin/ozon-perf-mcp`
+- catalog: tracked patched `perf_endpoints.yaml`
+- catalog count: **48**
+
+Seller:
+
+- package: `ozon-mcp-ru 0.6.0`
+- backend: `127.0.0.1:8000`
+- public endpoint: `https://ozon-mcp.kvantexpert.ru/mcp`
 
 ## Credentials
 
-Performance использует отдельные credentials:
+Performance:
+
+`/root/.config/ozon-mcp/perf.env`
+
+Variables:
 
 - `OZON_PERF_CLIENT_ID`
 - `OZON_PERF_CLIENT_SECRET`
 
-Файл на VPS:
+Permissions:
 
-`/root/.config/ozon-mcp/perf.env`
+`600 root:root`
 
-Права:
+Secrets are never committed.
 
-`root:root 600`
+## API catalog
 
-Секретные значения в GitHub не фиксируются.
+Current upstream OpenAPI source contains 48 operations.
 
-## Подтвержденный OAuth
+Tracked patch contains 48 operations.
 
-Проверен реальный OAuth flow:
+The patch adds:
 
-`POST https://api-performance.ozon.ru/api/client/token`
+1. `POST /api/client/statistics/products/sku`
+2. `PATCH /api/client/campaign/{campaignId}`
+3. `GET /api/client/campaign/all_sku_promo/set_bid`
 
-с `grant_type=client_credentials`.
+Safety corrections include semantic classification of POST read methods and GET mutators.
 
-Результат:
+## Live audit result
 
-- HTTP 200;
-- `token_type=Bearer`;
-- `expires_in=1800`;
-- access token успешно получен.
+26.09.2026:
 
-## Подтвержденный прямой API вызов
+**48/48 operation_id successfully returned from the running MCP; 0 FAIL.**
 
-Проверен:
+Verified directly in the running process:
 
-`GET /api/client/campaign`
+- new statistics/products/sku → `read`;
+- PATCH campaign → `write`;
+- all-SKU set-bid GET → `write`;
+- min SKU POST → `read`;
+- recommended bids POST → `read`;
+- all-SKU activate/deactivate GET → `write`.
 
-Результат:
+The audit uses `ozon_perf_describe_method`, so it validates catalog loading and dispatcher visibility. It does not execute write operations.
 
-- HTTP 200;
-- `list: []`;
-- `total: "0"`.
+## End-to-end API state
 
-На момент проверки в Performance-кабинете нет рекламных кампаний. Это не ошибка подключения.
+Before the pinned migration, OAuth and a harmless `GET /api/client/campaign` were successfully tested end-to-end and returned HTTP 200 with an empty campaign list.
 
-## Подтвержденный MCP flow
+The post-migration 48/48 audit is complete. A fresh post-migration data read is intentionally tracked as the next smoke-test so that deployment validation remains distinguishable from catalog validation.
 
-Проверена полная цепочка:
+## Safety model
 
-```
-MCP initialize
-    ↓
-tools/list
-    ↓
-tools/call
-    ↓
-ozon_perf_call_method
-    ↓
-OAuth
-    ↓
-Ozon Performance API
-    ↓
-HTTP 200
-```
+The runtime exposes generic dispatcher tools rather than one MCP tool per API operation:
 
-Фактический MCP вызов:
+- `ozon_perf_call_method` — read;
+- `ozon_perf_write_method` — write with confirmation;
+- `ozon_perf_delete_method` — destructive with additional confirmation;
+- raw write/delete tools — separately protected.
 
-`ozon_perf_call_method`
+Do not interpret 48 operation_id as 48 independent MCP tools.
 
-с:
+## What is intentionally not done
 
-`operation_id = ozonperf_get_api_client_campaign`
+- Performance :8001 is not exposed through nginx.
+- Seller MCP is not modified.
+- Performance credentials are not stored in GitHub.
+- Write/destructive operations have not been treated as safe merely because their operation_id exists.
+- No decision has been made yet about the external AI-visible Performance tool set.
 
-вернул:
+## Next development steps
 
-```json
-{
-  "ok": true,
-  "status": 200,
-  "data": {
-    "list": [],
-    "total": "0"
-  }
-}
-```
+1. Post-migration harmless read smoke-test.
+2. Test key READ methods and document results.
+3. Define minimal AI-visible Performance tool set.
+4. Test WRITE methods with confirmation and verification.
+5. Design external access/authentication for Performance MCP.
+6. Only then consider nginx/public exposure.
 
-Таким образом, Performance MCP считается **технически работоспособным end-to-end**.
+## Repository source of truth
 
-## Каталог Performance API
-
-В установленной реализации доступны 45 operation_id, включая группы:
-
-- кампании;
-- лимиты;
-- статистика;
-- отчеты;
-- товары кампаний;
-- ставки;
-- Search Promo;
-- CPO;
-- активация/деактивация кампаний;
-- dynamic budget;
-- vendor statistics;
-- vendor tag.
-
-Полный актуальный каталог должен извлекаться из установленного `perf_endpoints.yaml`, а не восстанавливаться по памяти.
-
-## Важное ограничение текущего этапа
-
-Сейчас подтверждена работоспособность инфраструктуры и read-вызова.
-
-Еще **не принято решение**, какие Performance-инструменты будут доступны внешнему AI-клиенту.
-
-Не следует:
-
-- открывать `:8001` напрямую в Интернет;
-- менять существующий Seller MCP без необходимости;
-- выдавать наружу весь набор write-инструментов без отдельной проверки;
-- переносить credentials в GitHub;
-- считать наличие operation_id достаточным доказательством безопасности конкретной write-операции.
-
-## Следующий план
-
-### Этап 1 — исследование read API
-
-Проверить через MCP несколько ключевых read-операций:
-
-1. список кампаний;
-2. лимиты;
-3. товары кампаний;
-4. статистику;
-5. отчеты;
-6. дополнительные данные, необходимые для управления рекламой.
-
-Для каждого фактического теста фиксировать:
-
-- operation_id;
-- HTTP method;
-- endpoint;
-- входные параметры без секретов;
-- HTTP status;
-- сокращенный результат;
-- ошибки;
-- вывод.
-
-### Этап 2 — определить минимальный набор AI-инструментов
-
-Отделить:
-
-- безопасные READ;
-- операции подготовки изменений;
-- WRITE;
-- потенциально опасные/destructive операции.
-
-Не публиковать все 45 методов автоматически только потому, что они существуют в каталоге.
-
-### Этап 3 — внешний MCP доступ
-
-Выбрать архитектуру доступа AI-клиента к Performance MCP.
-
-До принятия решения:
-
-- 8001 остается loopback;
-- Seller MCP остается на 8000;
-- существующий публичный endpoint не меняется.
-
-### Этап 4 — write-операции
-
-Проверять отдельно:
-
-- активацию/деактивацию;
-- изменение товаров кампании;
-- ставки;
-- Search Promo;
-- бюджеты.
-
-Перед публикацией write-инструментов проверить механизм подтверждения, параметры и возможность безопасной верификации результата.
-
-### Этап 5 — единая документация
-
-После завершения каждого этапа обновлять:
-
-- этот baseline;
-- `server/` runtime-документацию;
-- историю тестов;
-- deployment-документацию при изменении инфраструктуры.
-
-## Правило возврата к этой точке
-
-Если дальнейшая разработка Performance MCP приведет к проблемам, контрольная точка означает:
-
-- Seller MCP работает на `:8000`;
-- Performance MCP работает на `:8001`;
-- Performance credentials находятся только в `perf.env`;
-- OAuth проходит;
-- `ozon_perf_call_method` работает;
-- `ozonperf_get_api_client_campaign` возвращает HTTP 200;
-- публичного Performance endpoint еще нет.
-
-Это состояние считается базовой точкой для следующих изменений.
+- API contract: `docs/PERFORMANCE_API_MATRIX_2026-09-26.md`
+- Catalog patch: `patches/marketplaces-mcp-ru/perf_endpoints.yaml`
+- Automated tests: `tests/test_performance_catalog_patch.py`
+- Installer: `deploy/scripts/install-performance-mcp.sh`
+- Systemd: `deploy/systemd/ozon-performance.service`
+- Runtime state: `server/PERFORMANCE_RUNTIME.md`
+- VPS state: `server/SERVER_STATE.md`
