@@ -142,3 +142,19 @@ total = "0"
 9. выполнить `ozon_perf_call_method` для `ozonperf_get_api_client_campaign`.
 
 Секреты должны вводиться непосредственно на VPS и не переноситься в Git.
+
+
+## Next reproducible deployment
+
+The previous production command used unpinned uvx --from marketplaces-mcp-ru ozon-perf-mcp.
+The repository now contains a reproducible installer:
+
+deploy/scripts/install-performance-mcp.sh
+
+It:
+1. checks out upstream commit ec2114595695536e001e09e1144a357118852db1;
+2. replaces only ozon_mcp/perf_endpoints.yaml with the audited 48-operation catalog;
+3. installs the package into /opt/kvantexpert/marketplaces-mcp-ru/.venv;
+4. leaves Seller MCP :8000 untouched.
+
+The tracked systemd unit now points to that local virtualenv. The live VPS is NOT considered migrated until the installer has been run and the full 48-operation live audit passes.
