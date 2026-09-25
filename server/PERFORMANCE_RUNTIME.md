@@ -2,9 +2,13 @@
 
 ## Текущее состояние
 
-Дата фиксации: 2026-09-26
+Дата фиксации: **2026-09-26**
 
 Хост: `cv7976275`
+
+Статус: **LIVE / migrated / audited**
+
+На VPS работает отдельный Performance MCP на базе pinned upstream `marketplaces-mcp-ru 0.6.1` с локально применённым audited 48-operation catalog patch.
 
 ## Systemd
 
@@ -15,12 +19,12 @@
 Запуск:
 
 ```
-/root/.local/bin/uvx --from marketplaces-mcp-ru ozon-perf-mcp
+/opt/kvantexpert/marketplaces-mcp-ru/.venv/bin/ozon-perf-mcp
 ```
 
-Конфигурация:
+Unit:
 
-`/root/.config/ozon-mcp/perf.env`
+`deploy/systemd/ozon-performance.service`
 
 Пользователь:
 
@@ -28,13 +32,17 @@
 
 Рабочий каталог:
 
-`/root`
+`/opt/kvantexpert/marketplaces-mcp-ru`
+
+Environment:
+
+`/root/.config/ozon-mcp/perf.env`
 
 Автозапуск:
 
 `enabled`
 
-Состояние на момент фиксации:
+Состояние:
 
 `active/running`
 
@@ -48,41 +56,94 @@ Performance MCP:
 
 `Streamable HTTP`
 
-Публичного nginx route для Performance MCP пока нет.
+Публичного nginx route для Performance MCP **нет**.
 
-Это сделано намеренно: текущий HTTP transport не должен быть выставлен непосредственно в Интернет без отдельного механизма защиты.
+Порт 8001 намеренно остается loopback-only.
 
-## Seller MCP
-
-Существующий сервис не изменен:
-
-`ozon-mcp.service`
-
-Backend:
-
-`127.0.0.1:8000`
-
-Public endpoint:
+Публичный Seller MCP продолжает работать отдельно:
 
 `https://ozon-mcp.kvantexpert.ru/mcp`
 
 ## Package source
 
-Performance запускается из:
+Performance:
 
-`marketplaces-mcp-ru 0.6.1`
+- package: `marketplaces-mcp-ru 0.6.1`
+- upstream repository: `https://github.com/ilyautov/marketplaces-mcp-ru.git`
+- pinned upstream commit: `ec2114595695536e001e09e1144a357118852db1`
 
-Upstream commit:
+Runtime устанавливается reproducibly через:
 
-`ec2114595695536e001e09e1144a357118852db1`
+`deploy/scripts/install-performance-mcp.sh`
+
+Скрипт:
+
+1. checkout'ит pinned upstream commit;
+2. заменяет только `ozon_mcp/perf_endpoints.yaml` на tracked audited catalog;
+3. создает локальный Python venv;
+4. устанавливает `marketplaces-mcp-ru 0.6.1`;
+5. оставляет Seller MCP :8000 нетронутым.
 
 Seller production:
 
-`ozon-mcp-ru 0.6.0`
+- package: `ozon-mcp-ru 0.6.0`
+- backend: `127.0.0.1:8000`
 
-Таким образом, Seller и Performance сейчас используют разные entrypoint/package paths. Это зафиксировано и не должно считаться ошибкой до отдельного решения о выравнивании deployment.
+Seller и Performance не объединяются в один runtime.
+
+## Performance catalog
+
+Tracked catalog:
+
+`patches/marketplaces-mcp-ru/perf_endpoints.yaml`
+
+Количество:
+
+**48 endpoints / operation_id**
+
+Runtime catalog после миграции также содержит **48 операций**.
+
+Полная матрица:
+
+`docs/PERFORMANCE_API_MATRIX_2026-09-26.md`
+
+Автотест:
+
+`tests/test_performance_catalog_patch.py`
+
+Проверяются:
+
+- количество 48;
+- уникальность operation_id;
+- 3 новые операции;
+- safety corrections;
+- отсутствие GET-мутаторов с safety=read.
+
+## Live audit
+
+26.09.2026 выполнен live-аудит через MCP `ozon_perf_describe_method`.
+
+Результат:
+
+**48/48 operation_id найдены; 0 FAIL.**
+
+Проверены в том числе новые операции:
+
+- `POST /api/client/statistics/products/sku` → `read`;
+- `PATCH /api/client/campaign/{campaignId}` → `write`;
+- `GET /api/client/campaign/all_sku_promo/set_bid` → `write`.
+
+Также подтверждены исправления:
+
+- `POST /api/client/min/sku` → `read`;
+- `POST /api/client/search_promo/bids/recommendation` → `read`;
+- GET activate/deactivate all SKU promo → `write`.
+
+Этот аудит подтверждает загрузку patched catalog в работающий runtime. Он не заменяет отдельную проверку фактических write-операций.
 
 ## Credentials
+
+Файл:
 
 `/root/.config/ozon-mcp/perf.env`
 
@@ -96,65 +157,70 @@ MCP_HTTP_HOST=127.0.0.1
 MCP_HTTP_PORT=8001
 ```
 
-Фактические secret values в GitHub и документацию не записываются.
-
-Права файла:
+Права:
 
 `600 root:root`
 
-## Проверки
+Реальные secret values в GitHub и документацию не записываются.
+
+## Подтвержденные проверки
 
 Подтверждены:
 
-- systemd startup;
-- listening socket;
+- OAuth client_credentials;
+- получение Bearer token;
+- прямой Performance API request;
 - MCP initialize;
 - MCP tools/list;
-- OAuth token request;
-- прямой Performance API request;
 - MCP tools/call;
-- HTTP 200 от Performance API.
+- `ozon_perf_describe_method`;
+- live catalog audit 48/48.
 
-Контрольный вызов:
+Ранее end-to-end read test для `GET /api/client/campaign` дал HTTP 200 с:
 
-`ozonperf_get_api_client_campaign`
-
-Результат:
-
-```
-HTTP 200
-list = []
-total = "0"
+```json
+{
+  "list": [],
+  "total": "0"
+}
 ```
 
-## Восстановление
+После миграции на pinned patched build каталог и MCP flow проверены отдельно. Новый live data read после миграции следует считать отдельным smoke-test, а не смешивать его с 48/48 catalog audit.
 
-Минимальная последовательность:
+## Safety model
 
-1. установить `uv`;
-2. установить/получить `marketplaces-mcp-ru 0.6.1`;
-3. создать `perf.env` с Performance credentials;
-4. установить `ozon-performance.service`;
-5. запустить сервис;
-6. проверить `:8001/mcp`;
-7. выполнить OAuth test;
-8. выполнить MCP initialize;
-9. выполнить `ozon_perf_call_method` для `ozonperf_get_api_client_campaign`.
+Generic MCP tools остаются:
 
-Секреты должны вводиться непосредственно на VPS и не переноситься в Git.
+- `ozon_perf_call_method` — read;
+- `ozon_perf_write_method` — write, требует подтверждения;
+- `ozon_perf_delete_method` — destructive, требует дополнительных подтверждений;
+- raw write/delete также защищены.
 
+**48 operation_id не означают 48 отдельных MCP tools.** Runtime использует generic dispatcher по `operation_id`.
 
-## Next reproducible deployment
+## Recovery
 
-The previous production command used unpinned uvx --from marketplaces-mcp-ru ozon-perf-mcp.
-The repository now contains a reproducible installer:
+Для повторного deployment:
 
-deploy/scripts/install-performance-mcp.sh
+1. checkout repository;
+2. запустить `deploy/scripts/install-performance-mcp.sh`;
+3. установить `deploy/systemd/ozon-performance.service`;
+4. создать `/root/.config/ozon-mcp/perf.env` непосредственно на VPS;
+5. `systemctl daemon-reload`;
+6. `systemctl enable --now ozon-performance`;
+7. проверить `:8001/mcp`;
+8. выполнить MCP initialize/tools/list;
+9. выполнить 48/48 describe audit;
+10. отдельно выполнить безопасный read smoke-test.
 
-It:
-1. checks out upstream commit ec2114595695536e001e09e1144a357118852db1;
-2. replaces only ozon_mcp/perf_endpoints.yaml with the audited 48-operation catalog;
-3. installs the package into /opt/kvantexpert/marketplaces-mcp-ru/.venv;
-4. leaves Seller MCP :8000 untouched.
+Seller MCP при этом не изменяется.
 
-The tracked systemd unit now points to that local virtualenv. The live VPS is NOT considered migrated until the installer has been run and the full 48-operation live audit passes.
+## Следующий этап
+
+1. Выполнить post-migration read smoke-test через `ozon_perf_call_method`.
+2. Проверить необходимые READ методы Performance API.
+3. Определить минимальный набор инструментов для AI-клиента.
+4. Отдельно тестировать WRITE операции с подтверждением.
+5. Только после этого проектировать внешний доступ к Performance MCP.
+
+До отдельного решения Performance MCP остается loopback-only.
