@@ -6,10 +6,10 @@ Wants=network-online.target
 [Service]
 Type=simple
 User=root
-WorkingDirectory=/root
+WorkingDirectory=/opt/kvantexpert/marketplaces-mcp-ru
 EnvironmentFile=/root/.config/ozon-mcp/perf.env
-Environment=PATH=/root/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
-ExecStart=/root/.local/bin/uvx --from marketplaces-mcp-ru ozon-perf-mcp
+Environment=PATH=/opt/kvantexpert/marketplaces-mcp-ru/.venv/bin:/root/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+ExecStart=/opt/kvantexpert/marketplaces-mcp-ru/.venv/bin/ozon-perf-mcp
 Restart=always
 RestartSec=5
 
