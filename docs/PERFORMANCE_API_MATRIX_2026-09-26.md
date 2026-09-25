@@ -5,8 +5,8 @@
 ## Статус
 
 - Актуальный OpenAPI: **48 операций**.
-- Текущий `marketplaces-mcp-ru 0.6.1`: **45 операций**.
-- Отсутствуют в текущем MCP: **3 операции**.
+- Pinned patched runtime `marketplaces-mcp-ru 0.6.1`: **48 операций**.
+- Missing operations after patch: **0**.
 - Safety классификация ниже нормализована по семантике операции, а не только по HTTP-методу.
 - `read` — получение/расчёт данных без изменения состояния рекламного кабинета.
 - `write` — создание/изменение/включение/отключение/установка параметров.
@@ -159,7 +159,7 @@ None.
 
 **PATCH /api/client/campaign/{campaignId}**  
 Safety: **write**  
-MCP operation: **MISSING in current 45-operation catalog**  
+MCP operation: ****present in patched 48-operation catalog****  
 Summary: Параметры кампании  
 Description: Метод для изменения параметров кампании.  
 
@@ -567,7 +567,7 @@ None.
 
 **GET /api/client/campaign/all_sku_promo/set_bid**  
 Safety: **write**  
-MCP operation: **MISSING in current 45-operation catalog**  
+MCP operation: ****present in patched 48-operation catalog****  
 Summary: Установить ставку для продвижения в Оплате за заказ — все товары  
 
 #### Path/query parameters
@@ -1518,7 +1518,7 @@ null
 
 **POST /api/client/statistics/products/sku**  
 Safety: **read**  
-MCP operation: **MISSING in current 45-operation catalog**  
+MCP operation: ****present in patched 48-operation catalog****  
 Summary: Получить статистику по товарам в оплате за клик  
 Description: <aside class="notice"> Не расходует лимиты Performance API. </aside>   
 
@@ -1811,12 +1811,23 @@ Body required: **yes**
 6. `PATCH /api/client/campaign/{campaignId}` — **write**.
 7. Delete endpoints are **destructive**.
 
+## Live runtime audit
+
+26.09.2026 live runtime audit через `ozon_perf_describe_method`:
+
+- expected operation_id: **48**;
+- found in running MCP: **48**;
+- missing: **0**;
+- failed describe calls: **0**.
+
+Это подтверждает, что patched catalog загружен в production Performance MCP на `127.0.0.1:8001`. Аудит не выполняет write/destructive операции.
+
 ## Source and reproducibility
 
 - OpenAPI source: `MissiaL/ozon-api` / `references/ozon-performance-openapi.json`.
 - OpenAPI blob SHA: `c1d098e0bd9fd6ad8e6ff825b2c8451a531f8d7d`.
 - Source URL: https://github.com/MissiaL/ozon-api/blob/main/references/ozon-performance-openapi.json
-- Live MCP audit source: `/tmp/ozon-perf-describe-2026-09-26.json`, 45/45 successful `ozon_perf_describe_method` responses.
-- Live normalized matrix: `/tmp/ozon-perf-live-matrix.json`.
+- Live MCP audit: 48/48 successful `ozon_perf_describe_method` responses on 2026-09-26.
+- The temporary audit files on the VPS are not repository source-of-truth; the tracked YAML catalog and this matrix are the durable reference.
 
 > Эта документация фиксирует API-контракт и классификацию. Она **не меняет runtime-код** Performance MCP.
