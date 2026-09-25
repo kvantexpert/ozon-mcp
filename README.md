@@ -137,3 +137,11 @@ MCP-сервер, конфигурация развертывания и дол�
 ## Ozon Performance API
 
 - [Полная матрица Ozon Performance API — 48 операций](docs/PERFORMANCE_API_MATRIX_2026-09-26.md)
+
+
+## Ozon Performance implementation
+
+- [Performance API matrix](docs/PERFORMANCE_API_MATRIX_2026-09-26.md)
+- [Performance implementation plan](docs/PERFORMANCE_PATCH_PLAN_2026-09-26.md)
+- [Pinned catalog patch](patches/marketplaces-mcp-ru/perf_endpoints.yaml)
+- [Performance installer](deploy/scripts/install-performance-mcp.sh)
